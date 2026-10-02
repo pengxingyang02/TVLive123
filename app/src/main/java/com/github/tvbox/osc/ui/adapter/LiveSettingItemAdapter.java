@@ -1,6 +1,7 @@
 package com.github.tvbox.osc.ui.adapter;
 
 import android.graphics.Color;
+import android.view.View;
 import android.widget.TextView;
 
 import com.chad.library.adapter.base.BaseQuickAdapter;
@@ -18,6 +19,11 @@ import java.util.ArrayList;
  */
 public class LiveSettingItemAdapter extends BaseQuickAdapter<LiveSettingItem, BaseViewHolder> {
     private int focusedItemIndex = -1;
+    private OnDeleteItemListener onDeleteItemListener;
+
+    public interface OnDeleteItemListener {
+        void onDeleteItem(int position);
+    }
 
     public LiveSettingItemAdapter() {
         super(R.layout.item_live_setting, new ArrayList<>());
@@ -34,6 +40,22 @@ public class LiveSettingItemAdapter extends BaseQuickAdapter<LiveSettingItem, Ba
             tvItemName.setTextColor(mContext.getResources().getColor(R.color.color_1890FF));
         } else {
             tvItemName.setTextColor(Color.WHITE);
+        }
+
+        TextView tvDelete = holder.getView(R.id.tvDeleteItem);
+        if (item.isCanDelete()) {
+            tvDelete.setVisibility(View.VISIBLE);
+            tvDelete.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (onDeleteItemListener != null) {
+                        onDeleteItemListener.onDeleteItem(holder.getAdapterPosition());
+                    }
+                }
+            });
+        } else {
+            tvDelete.setVisibility(View.GONE);
+            tvDelete.setOnClickListener(null);
         }
     }
 
@@ -66,5 +88,9 @@ public class LiveSettingItemAdapter extends BaseQuickAdapter<LiveSettingItem, Ba
                 return item.getItemIndex();
         }
         return -1;
+    }
+
+    public void setOnDeleteItemListener(OnDeleteItemListener listener) {
+        this.onDeleteItemListener = listener;
     }
 }

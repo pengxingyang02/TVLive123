@@ -1,6 +1,7 @@
 package com.github.tvbox.osc.ui.dialog;
 
 import android.content.Context;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -36,8 +37,20 @@ public class RemoteDialog extends BaseDialog {
 
     @Override
     public void dismiss() {
-        ControlManager.get().stopServer();
+        // 不停止服务器 — 让 ControlManager 管理生命周期，保持投屏可持续
         super.dismiss();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            int keyCode = event.getKeyCode();
+            if (keyCode == KeyEvent.KEYCODE_ESCAPE || keyCode == KeyEvent.KEYCODE_BACK) {
+                dismiss();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void refreshQRCode() {

@@ -74,8 +74,12 @@ public class FileUtils {
                 os.write(buffer, 0, length);
             }
         } finally {
-            is.close();
-            os.close();
+            if (is != null) {
+                try { is.close(); } catch (IOException ignored) {}
+            }
+            if (os != null) {
+                try { os.close(); } catch (IOException ignored) {}
+            }
         }
     }
 

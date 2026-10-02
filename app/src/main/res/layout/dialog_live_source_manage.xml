@@ -85,6 +85,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/vs_10"
+            android:descendantFocusability="afterDescendants"
             android:orientation="vertical"
             app:layout_constrainedHeight="true"
             app:layout_constraintHeight_max="@dimen/vs_400"

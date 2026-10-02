@@ -33,6 +33,9 @@ public class JsonParallel {
             if (jx != null && jx.size() > 0) {
                 client = new OkHttpClient();
                 // 使用线程池并发处理任务
+                if (executorService != null) {
+                    executorService.shutdownNow();
+                }
                 executorService = Executors.newFixedThreadPool(5);
                 CompletionService<JSONObject> completionService = new ExecutorCompletionService<>(executorService);
                 futures.clear();

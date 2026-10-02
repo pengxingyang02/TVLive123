@@ -30,6 +30,9 @@ public class InputRequestProcess implements RequestProcess {
 
     @Override
     public NanoHTTPD.Response doResponse(NanoHTTPD.IHTTPSession session, String fileName, Map<String, String> params, Map<String, String> files) {
+        if (!remoteServer.isTokenValid(session)) {
+            return RemoteServer.createPlainTextResponse(NanoHTTPD.Response.Status.FORBIDDEN, "Invalid token");
+        }
         DataReceiver mDataReceiver = remoteServer.getDataReceiver();
         switch (fileName) {
             case "/action":
@@ -57,6 +60,32 @@ public class InputRequestProcess implements RequestProcess {
                             String url = params.get("url");
                             if (url != null && url.trim().length() > 0) {
                                 mDataReceiver.onPushReceived(url.trim());
+                            }
+                            break;
+                        }
+                        case "stop": {
+                            if (mDataReceiver != null) {
+                                mDataReceiver.onStopReceived();
+                            }
+                            break;
+                        }
+                        case "seek": {
+                            if (mDataReceiver != null) {
+                                try {
+                                    long posMs = Long.parseLong(params.get("pos"));
+                                    mDataReceiver.onSeekReceived(posMs);
+                                } catch (NumberFormatException e) {
+                                    // ignore invalid position
+                                }
+                            }
+                            break;
+                        }
+                        case "syncLocalChannels": {
+                            if (mDataReceiver != null) {
+                                String jsonData = params.get("data");
+                                if (jsonData != null && jsonData.trim().length() > 0) {
+                                    mDataReceiver.onLocalChannelsReceived(jsonData.trim());
+                                }
                             }
                             break;
                         }

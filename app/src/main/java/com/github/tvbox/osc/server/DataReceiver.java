@@ -20,4 +20,10 @@ public interface DataReceiver {
     void onDanmuApiReceived(String url);
 
     void onPushReceived(String url);
+
+    void onStopReceived();
+
+    void onSeekReceived(long positionMs);
+
+    void onLocalChannelsReceived(String json);
 }

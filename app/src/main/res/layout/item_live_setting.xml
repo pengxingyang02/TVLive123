@@ -23,4 +23,18 @@
         android:singleLine="true"
         android:textColor="@android:color/white"
         android:textSize="20mm" />
+
+    <TextView
+        android:id="@+id/tvDeleteItem"
+        android:layout_width="26mm"
+        android:layout_height="52mm"
+        android:layout_marginLeft="4mm"
+        android:background="@drawable/shape_live_focus"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:text="✕"
+        android:textColor="#FF4444"
+        android:textSize="18mm"
+        android:visibility="gone" />
 </LinearLayout>

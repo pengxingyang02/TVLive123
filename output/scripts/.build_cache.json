@@ -1,0 +1,10 @@
+{
+  "jdk_path": "D:/AI/AI-Code/tools/app/jdk-11",
+  "sdk_path": "D:/AI/AI-Code/tools/app/android-sdk",
+  "variant": "java32",
+  "build_type": "release",
+  "version": "4.4",
+  "last_version": "4.4",
+  "last_variant": "java32",
+  "last_build_type": "release"
+}

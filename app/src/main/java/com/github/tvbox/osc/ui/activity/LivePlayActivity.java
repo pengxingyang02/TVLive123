@@ -48,11 +48,15 @@ import com.github.tvbox.osc.bean.Epginfo;
 import com.github.tvbox.osc.bean.IJKCode;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveChannelItem;
+import com.github.tvbox.osc.event.RefreshEvent;
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
 import com.github.tvbox.osc.bean.LiveDayListGroup;
 import com.github.tvbox.osc.bean.LiveEpgDate;
 import com.github.tvbox.osc.bean.LivePlayerManager;
 import com.github.tvbox.osc.bean.LiveSettingGroup;
 import com.github.tvbox.osc.bean.LiveSettingItem;
+import com.github.tvbox.osc.bean.LiveSourceItem;
 import com.github.tvbox.osc.bean.LiveSourceManager;
 import com.github.tvbox.osc.player.controller.LiveController;
 import com.github.tvbox.osc.ui.adapter.LiveChannelGroupAdapter;
@@ -243,9 +247,19 @@ public class LivePlayActivity extends BaseActivity {
 
 
     //laodao 7day replay
-    public static SimpleDateFormat formatDate = new SimpleDateFormat("yyyy-MM-dd");
-    public static SimpleDateFormat formatDate1 = new SimpleDateFormat("MM-dd");
-    public static String day = formatDate.format(new Date());
+    private static final ThreadLocal<SimpleDateFormat> formatDateTL = new ThreadLocal<SimpleDateFormat>() {
+        @Override
+        protected SimpleDateFormat initialValue() {
+            return new SimpleDateFormat("yyyy-MM-dd");
+        }
+    };
+    private static final ThreadLocal<SimpleDateFormat> formatDate1TL = new ThreadLocal<SimpleDateFormat>() {
+        @Override
+        protected SimpleDateFormat initialValue() {
+            return new SimpleDateFormat("MM-dd");
+        }
+    };
+    public static String day = formatDateTL.get().format(new Date());
     public static Date nowday = new Date();
 
     private boolean isSHIYI = false;
@@ -283,6 +297,7 @@ public class LivePlayActivity extends BaseActivity {
     protected void init() {
         contextRef = new java.lang.ref.WeakReference<>(this);
         epgStringAddress = getConfiguredEpgAddress();
+        EventBus.getDefault().register(this);
 
         setLoadSir(findViewById(R.id.live_root));
         mVideoView = findViewById(R.id.mVideoView);
@@ -332,8 +347,8 @@ public class LivePlayActivity extends BaseActivity {
 
         //laodao 7day replay
         mEpgDateGridView = findViewById(R.id.mEpgDateGridView);
-        Hawk.put(HawkConfig.NOW_DATE, formatDate.format(new Date()));
-        day=formatDate.format(new Date());
+        Hawk.put(HawkConfig.NOW_DATE, formatDateTL.get().format(new Date()));
+        day=formatDateTL.get().format(new Date());
         nowday=new Date();
 
         mRightEpgList = (TvRecyclerView) findViewById(R.id.lv_epg);
@@ -1200,6 +1215,7 @@ public class LivePlayActivity extends BaseActivity {
             isBack= false;
             playPreSource();
         }else {
+            mHandler.removeCallbacks(mCastRetryRun);
             mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
             mHandler.removeCallbacks(mUpdateNetSpeedRun);
             exitingLivePlay = true;
@@ -1264,17 +1280,30 @@ public class LivePlayActivity extends BaseActivity {
                 if (action == KeyEvent.ACTION_DOWN) {
                     backcontroller.setVisibility(View.GONE);
                     isBack = false;
+                    showProgressBars(false);
                 }
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                    || keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
                     || keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER
-                    || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+                    || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY
+                    || keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE) {
                 return super.dispatchKeyEvent(event);
+            }
+            if (action == KeyEvent.ACTION_DOWN) {
+                return true;
             }
         }
 
         if (action == KeyEvent.ACTION_DOWN) {
+            if (tvRightSettingLayout.getVisibility() == View.VISIBLE) {
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                        || keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                        || keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                    return super.dispatchKeyEvent(event);
+                }
+            }
             if (tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
                 if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && isFocusInView(mChannelGroupView)) {
                     focusChannelFromSelectedGroup();
@@ -1309,16 +1338,32 @@ public class LivePlayActivity extends BaseActivity {
             } else if (!isListOrSettingLayoutVisible()) {
                 switch (keyCode) {
                     case KeyEvent.KEYCODE_DPAD_UP:
+                    case KeyEvent.KEYCODE_CHANNEL_UP:
+                    case KeyEvent.KEYCODE_PAGE_UP:
                         if (Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false))
                             playNext();
                         else
                             playPrevious();
                         return true;
                     case KeyEvent.KEYCODE_DPAD_DOWN:
+                    case KeyEvent.KEYCODE_CHANNEL_DOWN:
+                    case KeyEvent.KEYCODE_PAGE_DOWN:
                         if (Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false))
                             playPrevious();
                         else
                             playNext();
+                        return true;
+                    case KeyEvent.KEYCODE_MEDIA_PLAY:
+                    case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                    case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+                    case KeyEvent.KEYCODE_MEDIA_STOP:
+                        if (mVideoView != null) {
+                            if (mVideoView.isPlaying()) {
+                                mVideoView.pause();
+                            } else {
+                                mVideoView.start();
+                            }
+                        }
                         return true;
                     case KeyEvent.KEYCODE_DPAD_LEFT:
                         if(isBack){
@@ -1336,7 +1381,6 @@ public class LivePlayActivity extends BaseActivity {
                         return true;
                     case KeyEvent.KEYCODE_DPAD_CENTER:
                     case KeyEvent.KEYCODE_ENTER:
-                    case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
                         showChannelList();
                         return true;
                     default:
@@ -1353,7 +1397,7 @@ public class LivePlayActivity extends BaseActivity {
             }
         } else if (action == KeyEvent.ACTION_UP) {
             if (!isListOrSettingLayoutVisible()) {
-                if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) && event.getRepeatCount() == 0) {
+                if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) && event.getRepeatCount() == 0) {
                     if (mLongPressRunnable != null) {
                         mmHandler.removeCallbacks(mLongPressRunnable);
                         mLongPressRunnable = null;
@@ -1413,7 +1457,8 @@ public class LivePlayActivity extends BaseActivity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) && event.getRepeatCount() == 0) {
+        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) && event.getRepeatCount() == 0
+                && !isListOrSettingLayoutVisible()) {
             mLongPressRunnable = new Runnable() {
                 @Override
                 public void run() {
@@ -1427,7 +1472,7 @@ public class LivePlayActivity extends BaseActivity {
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
             if (mLongPressRunnable != null) {
                 mmHandler.removeCallbacks(mLongPressRunnable);
                 mLongPressRunnable = null;
@@ -1454,8 +1499,81 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
+    @Subscribe
+    public void onEventPushUrl(RefreshEvent event) {
+        if (event.type != RefreshEvent.TYPE_PUSH_URL) return;
+        if (mVideoView == null) return;
+        final String url = event.obj instanceof String ? (String) event.obj : null;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (TextUtils.isEmpty(url)) {
+                        // 停止投屏 → 恢复到之前播放的频道
+                        if (isSHIYI && mVideoView != null && currentLiveChannelItem != null) {
+                            isSHIYI = false;
+                            mVideoView.release();
+                            mVideoView.setUrl(currentLiveChannelItem.getUrl(), liveChannelHeader());
+                            mVideoView.start();
+                            LOG.i("LivePlayActivity: push stop — restored channel " + currentLiveChannelItem.getChannelName());
+                        } else {
+                            isSHIYI = false;
+                        }
+                        playUrl = null;
+                    } else {
+                        // play pushed URL — 必须先 release 让播放器回到 IDLE 状态，
+                        // 否则 start() 在 PLAYBACK 状态下只是 resume，不会加载新 URL
+                        playUrl = url;
+                        mVideoView.release();
+                        mVideoView.setUrl(playUrl, liveChannelHeader());
+                        mVideoView.start();
+                        isSHIYI = true;
+                        LOG.i("LivePlayActivity: push play url=" + url.substring(0, Math.min(80, url.length())));
+                        Toast.makeText(mContext, "PC 投屏已连接", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Throwable th) {
+                    LOG.e("LivePlayActivity: push error: " + th.getMessage());
+                }
+            }
+        });
+    }
+
+    @Subscribe
+    public void onEventSeekPosition(RefreshEvent event) {
+        if (event.type != RefreshEvent.TYPE_SEEK_POSITION) return;
+        if (mVideoView == null) return;
+        final long positionMs = event.obj instanceof Long ? (Long) event.obj : 0L;
+        if (positionMs <= 0) return;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mVideoView.seekTo(positionMs);
+                    LOG.i("LivePlayActivity: seekTo " + positionMs + "ms");
+                } catch (Throwable t) {
+                    LOG.e("LivePlayActivity: seek error: " + t.getMessage());
+                }
+            }
+        });
+    }
+
+    @Subscribe
+    public void onEventLocalChannelsSync(RefreshEvent event) {
+        if (event.type != RefreshEvent.TYPE_LOCAL_CHANNELS_SYNC) return;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                LiveSourceItem current = LiveSourceManager.get().getCurrentSource();
+                if (current != null && current.isLocal()) {
+                    loadLiveConfigOnEnter();
+                }
+            }
+        });
+    }
+
     @Override
     protected void onDestroy() {
+        EventBus.getDefault().unregister(this);
         super.onDestroy();
         Hawk.put(HawkConfig.PLAYER_IS_LIVE, false);
         hideSwitchChannelSnapshot();
@@ -1472,6 +1590,7 @@ public class LivePlayActivity extends BaseActivity {
             mHandler.removeCallbacks(mHideChannelInfoRun);
             mHandler.removeCallbacks(mFocusCurrentChannelAndShowChannelList);
             mHandler.removeCallbacks(mPlaySelectedChannel);
+            mHandler.removeCallbacks(mCastRetryRun);
             mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
             mHandler.removeCallbacks(mUpdateNetSpeedRun);
             mHandler.removeCallbacks(mUpdateTimeRun);
@@ -1484,6 +1603,10 @@ public class LivePlayActivity extends BaseActivity {
         if (countDownTimer != null) {
             countDownTimer.cancel();
             countDownTimer = null;
+        }
+        if (countDownTimer3 != null) {
+            countDownTimer3.cancel();
+            countDownTimer3 = null;
         }
         contextRef = null;
         hsEpg.clear();
@@ -2327,7 +2450,7 @@ public class LivePlayActivity extends BaseActivity {
 
         LiveDayListGroup daylist = new LiveDayListGroup();
         Date newday= new Date((nowday.getTime()));
-        String day = formatDate1.format(newday);
+        String day = formatDate1TL.get().format(newday);
         LOG.i("echo-date"+day);
         daylist.setGroupIndex(0);
         daylist.setGroupName(day);
@@ -2423,6 +2546,7 @@ public class LivePlayActivity extends BaseActivity {
             @Override
             public void playStateChanged(int playState) {
                 mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
+                mHandler.removeCallbacks(mCastRetryRun);
                 switch (playState) {
                     case VideoView.STATE_IDLE:
                         // 空闲状态：播放器处于空闲，尚未开始播放。一般不需要自动换源。
@@ -2445,15 +2569,19 @@ public class LivePlayActivity extends BaseActivity {
                         break;
                     case VideoView.STATE_ERROR:
                     case VideoView.STATE_PLAYBACK_COMPLETED:
-                        // 错误或播放结束状态：播放器遇到错误或播放完毕时，
-                        // 启动自动换源任务，等待3秒后尝试切换至备选源
                         hideSwitchChannelSnapshot();
-                        mHandler.postDelayed(mConnectTimeoutChangeSourceRun, 3500);
+                        if (isSHIYI) {
+                            mHandler.postDelayed(mCastRetryRun, 3500);
+                        } else {
+                            mHandler.postDelayed(mConnectTimeoutChangeSourceRun, 3500);
+                        }
                         break;
                     case VideoView.STATE_PREPARING:
                     case VideoView.STATE_BUFFERING:
                         // 正在准备或缓冲状态：表示当前源正在加载中
-                        mHandler.postDelayed(mConnectTimeoutChangeSourceRun, (Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 1) + 1) * 5000L);
+                        if (!isSHIYI) {
+                            mHandler.postDelayed(mConnectTimeoutChangeSourceRun, (Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 1) + 1) * 5000L);
+                        }
                         break;
                     default:
                         LOG.i("echo-Unexpected live_play state: " + playState);
@@ -2513,6 +2641,18 @@ public class LivePlayActivity extends BaseActivity {
             } else {
                 playNextSource();
             }
+        }
+    };
+
+    // 投屏模式专用重试：不换源/不换台，仅重连同一URL
+    private Runnable mCastRetryRun = new Runnable() {
+        @Override
+        public void run() {
+            if (!isSHIYI || mVideoView == null || TextUtils.isEmpty(playUrl)) return;
+            LOG.i("LivePlayActivity: cast retry — reconnecting to mirror stream");
+            mVideoView.release();
+            mVideoView.setUrl(playUrl, liveChannelHeader());
+            mVideoView.start();
         }
     };
 
@@ -2782,6 +2922,13 @@ public class LivePlayActivity extends BaseActivity {
                 clickSettingItem(position);
             }
         });
+
+        liveSettingItemAdapter.setOnDeleteItemListener(new LiveSettingItemAdapter.OnDeleteItemListener() {
+            @Override
+            public void onDeleteItem(int position) {
+                deleteHistoryItemAt(position);
+            }
+        });
     }
 
     private void clickSettingItem(int position) {
@@ -2857,6 +3004,17 @@ public class LivePlayActivity extends BaseActivity {
                 break;
             case 6: {//配置切换
                 ArrayList<String> history = Hawk.get(HawkConfig.LIVE_API_HISTORY, new ArrayList<String>());
+                int historySize = history.size();
+                if (position == historySize) {
+                    HistoryHelper.clearLiveApiHistory();
+                    ApiConfig.get().refreshLiveApiHistoryItems();
+                    liveSettingItemAdapter.setNewData(liveSettingGroupList.get(6).getLiveSettingItems());
+                    liveSettingItemAdapter.setFocusedItemIndex(-1);
+                    liveSettingItemAdapter.selectItem(-1, false, true);
+                    mSettingItemView.scrollToPosition(0);
+                    Toast.makeText(LivePlayActivity.this, "已清空全部配置历史", Toast.LENGTH_SHORT).show();
+                    break;
+                }
                 if (history.isEmpty() || position < 0 || position >= history.size()) break;
                 String value = history.get(position);
                 String oldLiveApi = Hawk.get(HawkConfig.LIVE_API_URL, "");
@@ -2866,6 +3024,16 @@ public class LivePlayActivity extends BaseActivity {
                 if (value.equals(oldLiveApi)) break;
                 final int requestId = ++liveConfigRequestId;
                 Hawk.put(HawkConfig.LIVE_API_URL, value);
+                if (value.startsWith("local://")) {
+                    String sourceName = value.substring("local://".length());
+                    List<LiveSourceItem> sources = LiveSourceManager.get().getSourceList();
+                    for (LiveSourceItem s : sources) {
+                        if (s.isLocal() && s.getName().equals(sourceName)) {
+                            LiveSourceManager.get().setCurrentSource(s);
+                            break;
+                        }
+                    }
+                }
                 HistoryHelper.setLiveApiHistory(value);
                 ApiConfig.get().refreshLiveApiHistoryItems();
                 ApiConfig.get().loadLiveConfig(false, new ApiConfig.LoadConfigCallback() {
@@ -3051,12 +3219,14 @@ public class LivePlayActivity extends BaseActivity {
                         new Thread(() -> {
                             try {
                                 ApiConfig.get().clearSpiderCache();
+                                ApiConfig.get().clearDiskCache();
                                 if (cacheDir.exists()) FileUtils.cleanDirectory(cacheDir);
                                 FileUtils.clearSpiderCacheFiles();
                             } catch (Exception e) {
                                 e.printStackTrace();
                             } finally {
                                 runOnUiThread(() -> {
+                                    if (isFinishing() || isDestroyed()) return;
                                     Toast.makeText(this, "缓存已清空,即将重启!", Toast.LENGTH_LONG).show();
                                     mHandler.postDelayed(() -> {
                                         Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
@@ -3249,6 +3419,44 @@ public class LivePlayActivity extends BaseActivity {
         return idx >= 0 ? idx : -1;
     }
 
+    private void deleteHistoryItemAt(int position) {
+        ArrayList<String> history = Hawk.get(HawkConfig.LIVE_API_HISTORY, new ArrayList<String>());
+        if (position < 0 || position >= history.size()) return;
+        String removed = history.get(position);
+        ArrayList<String> confirmItems = new ArrayList<>();
+        confirmItems.add("确认删除");
+        confirmItems.add("取消");
+        SelectDialog<String> confirmDialog = new SelectDialog<>(LivePlayActivity.this);
+        confirmDialog.setTip("删除配置: " + removed);
+        confirmDialog.setAdapter(new SelectDialogAdapter.SelectDialogInterface<String>() {
+            @Override
+            public void click(String value, int pos) {
+                confirmDialog.dismiss();
+                if (pos == 0) {
+                    HistoryHelper.removeLiveApiHistory(position);
+                    ApiConfig.get().refreshLiveApiHistoryItems();
+                    liveSettingItemAdapter.setNewData(liveSettingGroupList.get(6).getLiveSettingItems());
+                    liveSettingItemAdapter.setFocusedItemIndex(-1);
+                    int newSelectedIndex = getCurrentLiveApiHistoryIndex();
+                    if (newSelectedIndex < 0) {
+                        ArrayList<String> newHistory = Hawk.get(HawkConfig.LIVE_API_HISTORY, new ArrayList<String>());
+                        newSelectedIndex = newHistory.isEmpty() ? -1 : 0;
+                    }
+                    liveSettingItemAdapter.selectItem(newSelectedIndex, true, true);
+                    int scrollPos = newSelectedIndex >= 0 ? newSelectedIndex : 0;
+                    mSettingItemView.scrollToPosition(scrollPos);
+                    Toast.makeText(LivePlayActivity.this, "已删除: " + removed, Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public String getDisplay(String val) {
+                return val;
+            }
+        }, SelectDialogAdapter.stringDiff, confirmItems, 1);
+        confirmDialog.show();
+    }
+
     private void initLiveChannelList() {
         if (ApiConfig.get().shouldReloadLiveConfig()) {
             loadLiveConfigOnEnter();
@@ -3256,7 +3464,7 @@ public class LivePlayActivity extends BaseActivity {
         }
         List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
         if (list.isEmpty()) {
-            loadLiveConfigOnEnter();
+            setEmptyLiveChannelList();
             return;
         }
         initLiveObj();
@@ -3272,6 +3480,7 @@ public class LivePlayActivity extends BaseActivity {
     private void loadLiveConfigOnEnter() {
         if (loadingLiveConfigOnEnter) return;
         loadingLiveConfigOnEnter = true;
+        final int requestId = ++liveConfigRequestId;
         showLoading();
         ApiConfig.get().loadLiveConfig(true, new ApiConfig.LoadConfigCallback() {
             @Override
@@ -3279,6 +3488,10 @@ public class LivePlayActivity extends BaseActivity {
                 safePost(new Runnable() {
                     @Override
                     public void run() {
+                        if (requestId != liveConfigRequestId || isFinishing()) {
+                            loadingLiveConfigOnEnter = false;
+                            return;
+                        }
                         loadingLiveConfigOnEnter = false;
                         initLiveChannelList();
                         initLiveSettingGroupList();
@@ -3291,7 +3504,12 @@ public class LivePlayActivity extends BaseActivity {
                 safePost(new Runnable() {
                     @Override
                     public void run() {
+                        if (requestId != liveConfigRequestId || isFinishing()) {
+                            loadingLiveConfigOnEnter = false;
+                            return;
+                        }
                         loadingLiveConfigOnEnter = false;
+                        showSuccess();
                         setEmptyLiveChannelList();
                     }
                 });
@@ -3302,6 +3520,10 @@ public class LivePlayActivity extends BaseActivity {
                 safePost(new Runnable() {
                     @Override
                     public void run() {
+                        if (requestId != liveConfigRequestId || isFinishing()) {
+                            loadingLiveConfigOnEnter = false;
+                            return;
+                        }
                         Toast.makeText(LivePlayActivity.this, msg, Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -3353,6 +3575,11 @@ public class LivePlayActivity extends BaseActivity {
                     } catch (InterruptedException | ExecutionException e) {
                         e.printStackTrace();
                     } finally {
+                        try {
+                            executor.shutdown();
+                        } catch (Throwable th) {
+                            th.printStackTrace();
+                        }
                         if (sortJson==null || sortJson.isEmpty()) {
                             // 频道列表为空时，使用默认播放列表
                             safePost(new Runnable() {

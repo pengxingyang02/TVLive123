@@ -19,6 +19,7 @@ import com.github.catvod.crawler.python.IPyLoader;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveSourceManager;
+import com.github.tvbox.osc.bean.LiveSourceItem;
 import com.github.tvbox.osc.bean.IJKCode;
 import com.github.tvbox.osc.bean.LiveChannelItem;
 import com.github.tvbox.osc.bean.LiveSettingGroup;
@@ -280,6 +281,12 @@ public class ApiConfig {
             return;
         }
         final String liveApiUrl = apiUrl;
+        if (liveApiUrl.startsWith("local://")) {
+            loadLocalLiveChannels();
+            loadedLiveConfigUrl = liveApiUrl;
+            callback.success();
+            return;
+        }
         String liveApiConfigUrl = configUrl(liveApiUrl);
         final String liveConfigKey = TempKey;
         File live_cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + MD5.encode(liveApiUrl));
@@ -341,7 +348,12 @@ public class ApiConfig {
         String apiUrl = Hawk.get(HawkConfig.LIVE_API_URL, "");
         if (apiUrl.isEmpty()) apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (apiUrl.isEmpty()) apiUrl = LiveSourceManager.get().getCurrentSourceUrl();
-        return liveChannelGroupList == null || liveChannelGroupList.isEmpty() || !apiUrl.equals(loadedLiveConfigUrl);
+
+        if (apiUrl.startsWith("local://")) {
+            return !apiUrl.equals(loadedLiveConfigUrl);
+        }
+
+        return liveChannelGroupList == null || !apiUrl.equals(loadedLiveConfigUrl);
     }
 
     public static String getLiveGroupIndexKey() {
@@ -1187,9 +1199,45 @@ public class ApiConfig {
             LiveSettingItem liveSettingItem = new LiveSettingItem();
             liveSettingItem.setItemIndex(i);
             liveSettingItem.setItemName(history.get(i));
+            liveSettingItem.setCanDelete(true);
             liveSettingItemList.add(liveSettingItem);
         }
+        int historySize = history.size();
+        LiveSettingItem clearItem = new LiveSettingItem();
+        clearItem.setItemIndex(historySize);
+        clearItem.setItemName("清空全部");
+        liveSettingItemList.add(clearItem);
         liveSettingGroupList.get(6).setLiveSettingItems(liveSettingItemList);
+    }
+
+    private void loadLocalLiveChannels() {
+        LiveSourceItem localSource = LiveSourceManager.get().getCurrentSource();
+        List<LiveSourceItem.LocalChannel> channels = localSource != null ? localSource.getChannels() : null;
+
+        liveChannelGroupList.clear();
+        initLiveSettings();
+        if (channels == null || channels.isEmpty()) return;
+
+        JsonArray livesArray = new JsonArray();
+        JsonObject groupObj = new JsonObject();
+        groupObj.addProperty("group", "本地频道");
+        JsonArray channelsArr = new JsonArray();
+        for (LiveSourceItem.LocalChannel ch : channels) {
+            JsonObject chObj = new JsonObject();
+            chObj.addProperty("name", ch.getName());
+            JsonArray urlsArr = new JsonArray();
+            if (ch.getUrls() != null) {
+                for (String url : ch.getUrls()) {
+                    urlsArr.add(url);
+                }
+            }
+            chObj.add("urls", urlsArr);
+            channelsArr.add(chObj);
+        }
+        groupObj.add("channels", channelsArr);
+        livesArray.add(groupObj);
+
+        loadLives(livesArray);
     }
 
     public void loadLives(JsonArray livesArray) {
@@ -1859,5 +1907,26 @@ public class ApiConfig {
         currentLivePyKey = "";
         currentLiveSpider = "";
         clearLoader();
+    }
+
+    public void clearDiskCache() {
+        try {
+            File filesDir = App.getInstance().getFilesDir();
+            if (filesDir == null || !filesDir.exists()) return;
+            File[] allFiles = filesDir.listFiles();
+            if (allFiles != null) {
+                for (File f : allFiles) {
+                    if (f.isFile()) {
+                        f.delete();
+                    }
+                }
+            }
+            File cspDir = new File(filesDir, "csp");
+            if (cspDir.exists()) {
+                FileUtils.cleanDirectory(cspDir);
+            }
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
     }
 }

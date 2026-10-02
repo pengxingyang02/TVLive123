@@ -116,15 +116,31 @@ TVLive/
 
 ## 构建说明
 
-### 环境要求
+### 方式一：GUI 打包工具（推荐）
 
-- Android Studio 2021+ 
-- JDK 8
+项目提供了图形化打包工具 `output/scripts/build_gui.py`，支持自动检测/联网下载 JDK 和 Android SDK，无需手动配置开发环境。
+
+**运行方式：**
+```bash
+python output/scripts/build_gui.py
+```
+
+**功能特性：**
+- 自动检测已安装的 JDK 11+ 和 Android SDK
+- 支持在线下载 JDK 11 和 Android SDK 命令行工具
+- 支持 6 种构建变体，可自由组合 Android 版本和构建类型
+
+### 方式二：命令行构建（Android Studio）
+
+#### 环境要求
+
+- Android Studio 2021+
+- JDK 11+
 - Android SDK API 33
 - NDK（armeabi-v7a / arm64-v8a）
 - Python 3.8（用于 Pyramid 模块构建）
 
-### 构建步骤
+#### 构建步骤
 
 1. 克隆项目
 ```bash
@@ -138,10 +154,20 @@ cd TVLive
 
 4. 同步 Gradle 依赖
 
-5. 构建 APK
+5. 构建 APK（6 种变体可选）
 ```bash
-./gradlew assembleJava32Release
+# Java 变体（不含 Python 爬虫支持）
+./gradlew assembleJava32Release   # 32位 (armeabi-v7a), 最低 Android 4.4
+./gradlew assembleJavaRelease     # 32/64位 (v7a+v8a), 最低 Android 4.4
+./gradlew assembleJava64Release   # 64位 (arm64-v8a), 最低 Android 5.0
+
+# Python 变体（含 Python 爬虫支持）
+./gradlew assemblePython32Release # 32位 (armeabi-v7a), 最低 Android 4.4
+./gradlew assemblePythonRelease   # 32/64位 (v7a+v8a), 最低 Android 4.4
+./gradlew assemblePython64Release # 64位 (arm64-v8a), 最低 Android 5.0
 ```
+
+> 将 `Release` 替换为 `Debug` 可构建调试版本。
 
 6. 构建产物位于 `output/apk/` 目录
 

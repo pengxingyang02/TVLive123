@@ -1446,6 +1446,14 @@ public class SourceViewModel extends ViewModel {
     }
 
     private static final ConcurrentHashMap<String, String> extendCache = new ConcurrentHashMap<>();
+    private static final int MAX_EXTEND_CACHE_SIZE = 100;
+
+    private static void putExtendCache(String key, String value) {
+        if (extendCache.size() >= MAX_EXTEND_CACHE_SIZE) {
+            extendCache.clear();
+        }
+        extendCache.putIfAbsent(key, value);
+    }
 
     private String getFixUrl(final String extend) {
         return getFixUrl(extend, 20);
@@ -1468,13 +1476,13 @@ public class SourceViewModel extends ViewModel {
                     path = path.replaceAll("localhost/", "/");
                     result = FileUtils.readFileToString(path, "UTF-8");
                     result = tryMinifyJson(result);
-                    extendCache.putIfAbsent(key, result);
+                    putExtendCache(key, result);
                 } else if (extend.startsWith("http")) {
                     result = OkHttp.string(extend, null);
                     if (!result.isEmpty()) {
                         result = tryMinifyJson(result);
                         if(result.length()>2500)result = extend;
-                        extendCache.putIfAbsent(key, result);
+                        putExtendCache(key, result);
                     }
                 }
                 return result;
@@ -1874,13 +1882,13 @@ public class SourceViewModel extends ViewModel {
                 path = path.replaceAll("localhost/", "/");
                 result = FileUtils.readFileToString(path, "UTF-8");
                 result = tryMinifyJson(result);
-                extendCache.putIfAbsent(key, result);
+                putExtendCache(key, result);
             } else {
                 result = OkHttp.string(extend, null);
                 if (!TextUtils.isEmpty(result)) {
                     result = tryMinifyJson(result);
                     if (result.length() > 2500) result = extend;
-                    extendCache.putIfAbsent(key, result);
+                    putExtendCache(key, result);
                 }
             }
         } catch (Throwable th) {

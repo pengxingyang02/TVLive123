@@ -5,6 +5,7 @@ import static com.github.tvbox.osc.util.RegexUtils.getPattern;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Environment;
 import android.text.TextUtils;
 import android.util.Base64;
@@ -27,18 +28,20 @@ import org.greenrobot.eventbus.EventBus;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.URLDecoder;
-import java.net.URLEncoder;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,6 +51,7 @@ import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -69,11 +73,36 @@ public class RemoteServer extends NanoHTTPD {
     private ArrayList<RequestProcess> getRequestList = new ArrayList<>();
     private ArrayList<RequestProcess> postRequestList = new ArrayList<>();
 
+    private final String serverToken;
+
     public RemoteServer(int port, Context context) {
         super(port);
         mContext = context;
+        serverToken = generateToken(context);
         addGetRequestProcess();
         addPostRequestProcess();
+    }
+
+    private static String generateToken(Context ctx) {
+        try {
+            String seed = UUID.randomUUID().toString()
+                + ctx.getPackageName()
+                + System.currentTimeMillis();
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(seed.getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return UUID.randomUUID().toString().replace("-", "");
+        }
+    }
+
+    static final String TOKEN_PARAM = "_tk";
+
+    boolean isTokenValid(IHTTPSession session) {
+        String clientToken = session.getParms().get(TOKEN_PARAM);
+        return serverToken.equals(clientToken);
     }
 
     private void addGetRequestProcess() {
@@ -149,6 +178,12 @@ public class RemoteServer extends NanoHTTPD {
                 if (isProxyRequest(fileName, session.getParms())) {
                     return handleProxy(session);
                 }
+                if (fileName.equals("/script.js")) {
+                    return serveScriptWithToken();
+                }
+                if (fileName.equals("/api-token")) {
+                    return createPlainTextResponse(Response.Status.OK, serverToken);
+                }
                 for (RequestProcess process : getRequestList) {
                     if (process.isRequest(session, fileName)) {
                         return process.doResponse(session, fileName, session.getParms(), null);
@@ -197,6 +232,8 @@ public class RemoteServer extends NanoHTTPD {
                         url = URLDecoder.decode(url);
                     }
                     return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, NanoHTTPD.MIME_PLAINTEXT, "ok");
+                } else if (fileName.equals("/ping")) {
+                    return handlePing();
                 } else if (fileName.equals("/action")) {
                     return handleAction(session.getParms());
                 } else if (fileName.equals("/media")) {
@@ -247,20 +284,30 @@ public class RemoteServer extends NanoHTTPD {
                 }
                 try {
                     Map<String, String> params = session.getParms();
+                    if (fileName.equals("/upload") || fileName.equals("/newFolder")
+                            || fileName.equals("/delFolder") || fileName.equals("/delFile")) {
+                        if (!isTokenValid(session)) {
+                            return createPlainTextResponse(Response.Status.FORBIDDEN, "Invalid token");
+                        }
+                    }
                     if (fileName.equals("/upload")) {
                         String path = params.get("path");
+                        String root = Environment.getExternalStorageDirectory().getAbsolutePath();
                         for (String k : files.keySet()) {
                             if (k.startsWith("files-")) {
                                 String fn = params.get(k);
                                 String tmpFile = files.get(k);
                                 File tmp = new File(tmpFile);
-                                String root = Environment.getExternalStorageDirectory().getAbsolutePath();
-                                File file = new File(root + "/" + path + "/" + fn);
+                                File destDir = resolveSafePath(root, path != null ? path : "");
+                                if (destDir == null) {
+                                    return createPlainTextResponse(Response.Status.FORBIDDEN, "Access denied");
+                                }
+                                File file = new File(destDir, fn);
                                 if (file.exists())
                                     file.delete();
                                 if (tmp.exists()) {
-                                    if (fn.toLowerCase().endsWith(".zip")) {
-                                        unzip(tmp, root + "/" + path);
+                                    if (fn != null && fn.toLowerCase().endsWith(".zip")) {
+                                        unzip(tmp, destDir.getAbsolutePath());
                                     } else {
                                         FileUtils.copyFile(tmp, file);
                                     }
@@ -274,10 +321,13 @@ public class RemoteServer extends NanoHTTPD {
                         String path = params.get("path");
                         String name = params.get("name");
                         String root = Environment.getExternalStorageDirectory().getAbsolutePath();
-                        File file = new File(root + "/" + path + "/" + name);
-                        if (!file.exists()) {
-                            file.mkdirs();
-                            File flag = new File(root + "/" + path + "/" + name + "/.tvbox_folder");
+                        File dir = resolveSafePath(root, (path != null ? path : "") + "/" + (name != null ? name : ""));
+                        if (dir == null) {
+                            return createPlainTextResponse(Response.Status.FORBIDDEN, "Access denied");
+                        }
+                        if (!dir.exists()) {
+                            dir.mkdirs();
+                            File flag = new File(dir, ".tvbox_folder");
                             if (!flag.exists())
                                 flag.createNewFile();
                         }
@@ -285,7 +335,10 @@ public class RemoteServer extends NanoHTTPD {
                     } else if (fileName.equals("/delFolder")) {
                         String path = params.get("path");
                         String root = Environment.getExternalStorageDirectory().getAbsolutePath();
-                        File file = new File(root + "/" + path);
+                        File file = resolveSafePath(root, path != null ? path : "");
+                        if (file == null) {
+                            return createPlainTextResponse(Response.Status.FORBIDDEN, "Access denied");
+                        }
                         if (file.exists()) {
                             FileUtils.recursiveDelete(file);
                         }
@@ -293,11 +346,16 @@ public class RemoteServer extends NanoHTTPD {
                     } else if (fileName.equals("/delFile")) {
                         String path = params.get("path");
                         String root = Environment.getExternalStorageDirectory().getAbsolutePath();
-                        File file = new File(root + "/" + path);
+                        File file = resolveSafePath(root, path != null ? path : "");
+                        if (file == null) {
+                            return createPlainTextResponse(Response.Status.FORBIDDEN, "Access denied");
+                        }
                         if (file.exists()) {
                             file.delete();
                         }
                         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, NanoHTTPD.MIME_PLAINTEXT, "OK");
+                    } else if (fileName.equals("/action")) {
+                        return handleAction(params);
                     }
                 } catch (Throwable th) {
                     return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, NanoHTTPD.MIME_PLAINTEXT, "OK");
@@ -336,8 +394,37 @@ public class RemoteServer extends NanoHTTPD {
         String action = params.get("do");
         if ("refresh".equals(action)) {
             handleRefreshAction(params);
+        } else if ("push".equals(action)) {
+            handlePushAction(params);
+        } else if ("stop".equals(action)) {
+            handleStopAction();
+        } else if ("syncLocalChannels".equals(action)) {
+            handleSyncLocalChannels(params);
         }
         return createPlainTextResponse(Response.Status.OK, "ok");
+    }
+
+    private void handleSyncLocalChannels(Map<String, String> params) {
+        String data = params.get("data");
+        if (data != null && !data.isEmpty() && mDataReceiver != null) {
+            mDataReceiver.onLocalChannelsReceived(data);
+        }
+    }
+
+    private void handlePushAction(Map<String, String> params) {
+        String url = params.get("url");
+        if (url != null) {
+            try {
+                url = URLDecoder.decode(url, "UTF-8");
+            } catch (UnsupportedEncodingException ignored) {}
+        }
+        LOG.i("echo-push url: " + url);
+        EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_PUSH_URL, url));
+    }
+
+    private void handleStopAction() {
+        LOG.i("echo-push stop");
+        EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_PUSH_URL, ""));
     }
 
     private void handleRefreshAction(Map<String, String> params) {
@@ -355,6 +442,40 @@ public class RemoteServer extends NanoHTTPD {
             LOG.e("echo-media error: " + th.getMessage());
             return createJSONResponse(Response.Status.OK, "{}");
         }
+    }
+
+    private Response handlePing() {
+        try {
+            JsonObject info = new JsonObject();
+            info.addProperty("app", "TVLive");
+            info.addProperty("version", "1.1");
+            info.addProperty("deviceName", getDeviceName());
+            info.addProperty("deviceModel", Build.MODEL);
+            info.addProperty("manufacturer", Build.MANUFACTURER);
+            info.addProperty("host", getLocalIPAddress(mContext));
+            info.addProperty("port", serverPort);
+            com.google.gson.JsonArray caps = new com.google.gson.JsonArray();
+            caps.add("cast");
+            caps.add("push");
+            info.add("caps", caps);
+            return createJSONResponse(Response.Status.OK, info.toString());
+        } catch (Throwable th) {
+            LOG.e("echo-ping error: " + th.getMessage());
+            return createJSONResponse(Response.Status.OK, "{\"app\":\"TVLive\",\"error\":\"" + th.getMessage() + "\"}");
+        }
+    }
+
+    private String getDeviceName() {
+        String brand = Build.BRAND != null ? Build.BRAND : "";
+        String model = Build.MODEL != null ? Build.MODEL : "";
+        if (!TextUtils.isEmpty(brand) && !TextUtils.isEmpty(model)) {
+            if (model.toLowerCase().startsWith(brand.toLowerCase())) {
+                return model;
+            }
+            return brand + " " + model;
+        }
+        if (!TextUtils.isEmpty(model)) return model;
+        return "TVLive设备";
     }
 
     private void normalizeDanmuParams(Map<String, String> params) {
@@ -422,6 +543,46 @@ public class RemoteServer extends NanoHTTPD {
 
     public static Response createJSONResponse(Response.IStatus status, String text) {
         return newFixedLengthResponse(status, "application/json", text);
+    }
+
+    private File resolveSafePath(String root, String subPath) {
+        try {
+            File rootDir = new File(root).getCanonicalFile();
+            File target = new File(rootDir, subPath).getCanonicalFile();
+            if (!target.getPath().startsWith(rootDir.getPath() + File.separator)
+                && !target.equals(rootDir)) {
+                return null;
+            }
+            return target;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private Response serveScriptWithToken() {
+        try {
+            InputStream is = mContext.getResources().openRawResource(R.raw.script);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            reader.close();
+            String tokenJs = "\nwindow.__SERVER_TOKEN__ = \"" + serverToken + "\";\n";
+            String content = sb.toString() + tokenJs;
+            return newFixedLengthResponse(Response.Status.OK,
+                "application/x-javascript; charset=utf-8", content);
+        } catch (Exception e) {
+            InputStream is = mContext.getResources().openRawResource(R.raw.script);
+            try {
+                return newFixedLengthResponse(Response.Status.OK,
+                    "application/x-javascript; charset=utf-8", is, (long) is.available());
+            } catch (IOException ioExc) {
+                return createPlainTextResponse(Response.Status.INTERNAL_ERROR,
+                    "SERVER INTERNAL ERROR: " + ioExc.getMessage());
+            }
+        }
     }
 
     @SuppressLint("DefaultLocale")

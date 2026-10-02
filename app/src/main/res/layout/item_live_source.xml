@@ -34,6 +34,7 @@
         android:layout_weight="3"
         android:background="@drawable/button_danmu_setting"
         android:ellipsize="middle"
+        android:focusable="false"
         android:gravity="center_vertical"
         android:maxLines="1"
         android:padding="@dimen/vs_10"

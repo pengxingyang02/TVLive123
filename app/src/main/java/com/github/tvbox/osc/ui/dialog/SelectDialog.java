@@ -2,6 +2,7 @@ package com.github.tvbox.osc.ui.dialog;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -32,6 +33,18 @@ public class SelectDialog<T> extends BaseDialog {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            int keyCode = event.getKeyCode();
+            if (keyCode == KeyEvent.KEYCODE_ESCAPE) {
+                dismiss();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     public void setTip(String tip) {

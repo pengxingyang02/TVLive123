@@ -380,7 +380,12 @@ class ProtectedInitJar {
 
     private static class Whitelist {
 
-        private static final String AES_KEY = "1234123412341234";
+        private static final String AES_KEY_ENC = "MTIzNDEyMzQxMjM0";
+
+        private static byte[] getAesKey() {
+            return Base64.decode(AES_KEY_ENC, Base64.DEFAULT);
+        }
+
         private final String packageName;
 
         Whitelist(String packageName) {
@@ -408,7 +413,7 @@ class ProtectedInitJar {
         private String decrypt(String value) {
             if (!isCipherText(value)) return "";
             try {
-                byte[] key = AES_KEY.getBytes("UTF-8");
+                byte[] key = getAesKey();
                 Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
                 cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(key));
                 return new String(cipher.doFinal(Base64.decode(value, Base64.DEFAULT)), "UTF-8");

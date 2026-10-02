@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -113,7 +112,7 @@ public class OkGoHelper {
         ExoMediaSourceHelper.getInstance(App.getInstance()).setOkClient(ItvClient);
     }
 
-    public static DnsOverHttps dnsOverHttps = null;
+    public static volatile DnsOverHttps dnsOverHttps = null;
 
     public static ArrayList<String> dnsHttpsList = new ArrayList<>();
 
@@ -212,10 +211,8 @@ public class OkGoHelper {
 
     // 自定义 DNS 解析器
     static class CustomDns implements Dns {
-        private  ConcurrentHashMap<String, List<InetAddress>> map;
         private final String excludeIps = "2409:8087:6c02:14:100::14,2409:8087:6c02:14:100::18,39.134.108.253,39.134.108.245";
 
-        // 接收外部注入的 DoH 实例
         public CustomDns() {
         }
         @NonNull
@@ -234,19 +231,6 @@ public class OkGoHelper {
             else {
                 Dns dns = dnsOverHttps != null ? dnsOverHttps : Dns.SYSTEM;
                 return  dns.lookup(hostname);
-            }
-        }
-
-        public synchronized void mapHosts(Map<String,String> hosts) throws UnknownHostException {
-            map=new ConcurrentHashMap<>();
-            for (Map.Entry<String, String> entry : hosts.entrySet()) {
-                String key = entry.getKey();
-                String value = entry.getValue();
-                if(isValidIpAddress(value)){
-                    map.put(key,Collections.singletonList(InetAddress.getByName(value)));
-                }else {
-                    map.put(key,getAllByName(value));
-                }
             }
         }
 

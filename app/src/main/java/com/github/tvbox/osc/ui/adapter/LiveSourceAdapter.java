@@ -74,7 +74,16 @@ public class LiveSourceAdapter extends RecyclerView.Adapter<LiveSourceAdapter.Vi
         LiveSourceItem item = data.get(position);
         String prefix = item.getName().equals(currentName) ? "√ " : "";
         holder.tvName.setText(prefix + item.getName());
-        holder.tvUrl.setText(item.getUrl());
+
+        if (item.getType() == LiveSourceItem.TYPE_LOCAL) {
+            holder.tvUrl.setText("本地频道 (" + (item.getChannels() != null ? item.getChannels().size() : 0) + "个)");
+            holder.btnEdit.setVisibility(View.GONE);
+            holder.btnDelete.setVisibility(View.GONE);
+        } else {
+            holder.tvUrl.setText(item.getUrl());
+            holder.btnEdit.setVisibility(View.VISIBLE);
+            holder.btnDelete.setVisibility(View.VISIBLE);
+        }
 
         holder.tvName.setOnClickListener(new View.OnClickListener() {
             @Override

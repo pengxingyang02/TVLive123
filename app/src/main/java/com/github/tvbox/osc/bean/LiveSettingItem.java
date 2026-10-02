@@ -9,6 +9,7 @@ public class LiveSettingItem {
     private int itemIndex;
     private String itemName;
     private boolean itemSelected = false;
+    private boolean canDelete = false;
 
     public int getItemIndex() {
         return itemIndex;
@@ -32,5 +33,13 @@ public class LiveSettingItem {
 
     public void setItemSelected(boolean itemSelected) {
         this.itemSelected = itemSelected;
+    }
+
+    public boolean isCanDelete() {
+        return canDelete;
+    }
+
+    public void setCanDelete(boolean canDelete) {
+        this.canDelete = canDelete;
     }
 }

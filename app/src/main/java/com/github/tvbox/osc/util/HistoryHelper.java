@@ -38,6 +38,18 @@ public class HistoryHelper {
         Hawk.put(HawkConfig.SEARCH_HISTORY, new ArrayList<String>());
     }
 
+    public static void removeLiveApiHistory(int index) {
+        ArrayList<String> history = Hawk.get(HawkConfig.LIVE_API_HISTORY, new ArrayList<String>());
+        if (index >= 0 && index < history.size()) {
+            history.remove(index);
+            Hawk.put(HawkConfig.LIVE_API_HISTORY, history);
+        }
+    }
+
+    public static void clearLiveApiHistory() {
+        Hawk.put(HawkConfig.LIVE_API_HISTORY, new ArrayList<String>());
+    }
+
     public static void setLiveApiHistory(String value){
         ArrayList<String> history = Hawk.get(HawkConfig.LIVE_API_HISTORY, new ArrayList<String>());
         if (!history.contains(value)) {

@@ -5,6 +5,7 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.EditText;
 
@@ -47,6 +48,30 @@ public class LivePasswordDialog extends BaseDialog {
         super.onBackPressed();
         listener.onCancel();
         dismiss();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            int keyCode = event.getKeyCode();
+            if (keyCode == KeyEvent.KEYCODE_ESCAPE) {
+                listener.onCancel();
+                dismiss();
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                View focusedView = getCurrentFocus();
+                if (focusedView != null && focusedView.getId() == R.id.input) {
+                    String password = inputPassword.getText().toString().trim();
+                    if (!password.isEmpty()) {
+                        listener.onChange(password);
+                        dismiss();
+                    }
+                    return true;
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     public void setOnListener(OnListener listener) {

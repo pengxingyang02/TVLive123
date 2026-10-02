@@ -30,20 +30,21 @@ android {
 
     flavorDimensions "mode"
     productFlavors {
-        java32 {
-            dimension "mode"
-            minSdkVersion 16
-            ndk {
-                abiFilters 'armeabi-v7a'
-            }
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
+        java {  dimension "mode"; minSdkVersion 19; ndk { abiFilters 'armeabi-v7a', 'arm64-v8a' }; proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro' }
+        java32 {  dimension "mode"; minSdkVersion 19; ndk { abiFilters 'armeabi-v7a' }; proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro' }
+        java64 {  dimension "mode"; minSdkVersion 21; ndk { abiFilters 'arm64-v8a' }; proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro' }
+        python {  dimension "mode"; minSdkVersion 19; ndk { abiFilters 'armeabi-v7a', 'arm64-v8a' }; proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro', 'proguard-python.pro' }
+        python32 {  dimension "mode"; minSdkVersion 19; ndk { abiFilters 'armeabi-v7a' }; proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro', 'proguard-python.pro' }
+        python64 {  dimension "mode"; minSdkVersion 21; ndk { abiFilters 'arm64-v8a' }; proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro', 'proguard-python.pro' }
     }
 
     sourceSets {
-        java32 {
-            java.srcDirs += 'src/normal/java'
-        }
+        java { java.srcDirs += 'src/normal/java' }
+        java32 { java.srcDirs += 'src/normal/java' }
+        java64 { java.srcDirs += 'src/normal/java' }
+        python { java.srcDirs += 'src/python/java' }
+        python32 { java.srcDirs += 'src/python/java' }
+        python64 { java.srcDirs += 'src/python/java' }
     }
 
     buildTypes {
@@ -72,10 +73,21 @@ android {
         }
     }
 
+    def minSdkMap = [
+        java32  : 19,
+        java    : 19,
+        java64  : 21,
+        python32: 19,
+        python  : 19,
+        python64: 21,
+    ]
+
     applicationVariants.configureEach { variant ->
         variant.outputs.configureEach { output ->
-            def flavorNames = variant.productFlavors.collect { it.name }.join('-')
-            def fileName = "TVBox_${variant.buildType.name}-${flavorNames}.apk"
+            def flavorName = variant.productFlavors.collect { it.name }.join('-')
+            def api = minSdkMap[variant.productFlavors[0].name] ?: 0
+            def apiLabel = (api == 21) ? 'Android5.0' : 'Android4.4'
+            def fileName = "TVBox_${variant.buildType.name}-${flavorName}_${apiLabel}.apk"
             outputFileName = fileName
         }
         variant.getPackageApplicationProvider().configure { task ->
@@ -132,6 +144,10 @@ dependencies {
 
     implementation project(":player")
     implementation project(":quickjs")
+
+    pythonImplementation project(":pyramid")
+    python32Implementation project(":pyramid")
+    python64Implementation project(":pyramid")
 
     implementation 'com.lzy.net:okgo:3.0.4'
     implementation 'com.owen:tv-recyclerview:3.0.0'
