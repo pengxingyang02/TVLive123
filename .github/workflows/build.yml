@@ -63,6 +63,7 @@ jobs:
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           export PYTHON38_HOME=${{ steps.python38.path }}
           chmod +x gradlew
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
           ./gradlew assembleJava32Release
 
       - name: Upload Artifact
