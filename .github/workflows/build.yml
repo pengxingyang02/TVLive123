@@ -64,6 +64,8 @@ jobs:
           export PYTHON38_HOME=${{ steps.python38.path }}
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          # 自动生成debug签名文件
+          keytool -genkey -v -keystore app/debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           ./gradlew assembleJava32Release
 
       - name: Upload Artifact
