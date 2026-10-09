@@ -1,0 +1,35 @@
+name: Build TVLive123 Java32
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # 网页手动触发按钮（重点！可以点一下就开始编译）
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup JDK11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Setup Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Install Android SDK & NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Java32Release（armv7a minSdk4.4）
+        run: ./gradlew assembleJava32Release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVLive123-Java32-APK
+          path: output/apk/*.apk
