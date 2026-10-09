@@ -8,7 +8,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      PYTHON38_HOME: ${{ steps.python38.path }}
       SKIP_JDK_VERSION_CHECK: true
     steps:
       - name: Checkout code
@@ -27,7 +26,7 @@ jobs:
           python-version: '3.8'
 
       - name: Install Android SDK & NDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v2
 
       - name: 替换国内Maven镜像，加速依赖下载
         run: |
@@ -45,7 +44,9 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Build Java32Release（armv7a minSdk4.4）
-        run: ./gradlew assembleJava32Release
+        run: |
+          export PYTHON38_HOME=${{ steps.python38.path }}
+          ./gradlew assembleJava32Release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
