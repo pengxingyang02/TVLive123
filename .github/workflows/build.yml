@@ -7,16 +7,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      SKIP_JDK_VERSION_CHECK: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup JDK11
+      # 第一步：安装JDK17，用来运行sdkmanager（下载Android SDK工具）
+      - name: Setup JDK17 for sdkmanager
         uses: actions/setup-java@v5
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Python 3.8
@@ -25,8 +24,15 @@ jobs:
         with:
           python-version: '3.8'
 
-      - name: Install Android SDK & NDK
-        uses: android-actions/setup-android@v2
+      - name: Install Android SDK & NDK（此时JDK是17，可以正常运行sdkmanager）
+        uses: android-actions/setup-android@v3
+
+      # 下载SDK完成，切换JDK为11，用来编译TVLive123项目！
+      - name: Switch to JDK11 for project build
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
 
       - name: 替换国内Maven镜像，加速依赖下载
         run: |
